@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Split & Save — Shared Bills & Auto-Savings</title>
+  <style>
+    :root {
+      --bg-light: #f8fafc;
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --accent-green: #10b981;
+      --accent-green-light: #ecfdf5;
+      --accent-blue: #3b82f6;
+      --accent-blue-light: #eff6ff;
+      --accent-red: #ef4444;
+      --accent-red-light: #fef2f2;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg-light); color: var(--text-main); min-height: 100vh; padding: 24px; }
+
+    /* Auth Screen Overlay */
+    .auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .auth-card {
+      background: #ffffff;
+      width: 100%;
+      max-width: 380px;
+      padding: 28px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+
+    .auth-tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--card-border);
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 10px;
+      text-align: center;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+
+    .auth-tab.active {
+      color: var(--accent-blue);
+      border-color: var(--accent-blue);
+    }
+
+    /* Main Dashboard Layout */
+    #mainApp { display: none; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .logo-container { display: flex; align-items: center; gap: 12px; }
+    
+    /* Logo styled as S with $ look */
+    .brand-logo {
+      width: 46px;
+      height: 46px;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 24px;
+      color: var(--accent-green);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+      letter-spacing: -1px;
+      position: relative;
+    }
+
+    .brand-logo::after {
+      content: '|';
+      position: absolute;
+      color: var(--accent-green);
+      font-size: 26px;
+      font-weight: 300;
+      transform: translateY(-1px);
+    }
+
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .btn-logout {
+      background: var(--accent-red-light);
+      color: var(--accent-red);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      padding: 4px 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .metric-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+    .metric-val { font-size: 26px; font-weight: 700; margin-top: 4px; color: var(--text-main); }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 850px) {
+      .dashboard { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 6px; }
+    .form-control {
+      width: 100%;
+      padding: 10px 12px;
+      background: #ffffff;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+    .form-control:focus { outline: none; border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+
+    /* Dynamic Member Chips */
+    .members-wrapper {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 6px;
+    }
+
+    .member-chip {
+      background: #f1f5f9;
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+    }
+
+    .member-chip input[type="checkbox"] { accent-color: var(--accent-green); width: 15px; height: 15px; }
+
+    .remove-member-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0 2px;
+      margin-left: 2px;
+    }
+
+    .remove-member-btn:hover { color: var(--accent-red); }
+
+    .add-member-box {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .add-member-input {
+      width: 110px;
+      padding: 6px 10px;
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      font-size: 12px;
+      outline: none;
+    }
+
+    .add-member-btn {
+      background: var(--accent-blue);
+      color: #fff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, var(--accent-green), #059669);
+      color: #fff;
+      border: none;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+      width: 100%;
+      box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover { opacity: 0.95; transform: translateY(-1px); }
+
+    .summary-box {
+      background: var(--accent-green-light);
+      border: 1px solid #a7f3d0;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+
+    .summary-row { display: flex; justify-content: space-between; margin-bottom: 6px; color: #065f46; }
+
+    .tx-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+    .tx-table th { color: var(--text-muted); font-size: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--card-border); text-transform: uppercase; }
+    .tx-table td { padding: 12px 0; border-bottom: 1px solid var(--card-border); }
+
+    .tag-paid { background: var(--accent-blue-light); color: var(--accent-blue); padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .tag-owes { background: var(--accent-red-light); color: var(--accent-red); padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .tag-cleared { background: var(--accent-green-light); color: var(--accent-green); padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <!-- Auth Screen Overlay -->
+  <div class="auth-overlay" id="authOverlay">
+    <div class="auth-card">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <div class="brand-logo" style="margin: 0 auto 10px auto;">S</div>
+        <h2 style="font-size: 22px; font-weight: 800;">Split & Save</h2>
+        <p style="font-size: 12px; color: var(--text-muted);">Sign in to access your saved history</p>
+      </div>
+
+      <div class="auth-tabs">
+        <div class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Login</div>
+        <div class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Register</div>
+      </div>
+
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="authUsername" class="form-control" placeholder="Enter username">
+      </div>
+
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="authPassword" class="form-control" placeholder="Enter password">
+      </div>
+
+      <p id="authError" style="color: var(--accent-red); font-size: 12px; margin-bottom: 12px; display: none;"></p>
+
+      <button class="btn" id="authSubmitBtn" onclick="handleAuthSubmit()">Log In</button>
+    </div>
+  </div>
+
+  <!-- Main Application Container -->
+  <div id="mainApp">
+    <header>
+      <div class="logo-container">
+        <div class="brand-logo" title="Split & Save">S</div>
+        <div>
+          <h2 style="font-size: 20px; font-weight: 800;">Split & Save</h2>
+          <p style="font-size: 12px; color: var(--text-muted);">Smart Group Expenses & Auto-Savings Engine</p>
+        </div>
+      </div>
+
+      <div class="user-pill">
+        <span>👤 <span id="currentUserLabel">User</span></span>
+        <button class="btn-logout" onclick="logout()">Logout</button>
+      </div>
+    </header>
+
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Total Bills Split</div>
+        <div class="metric-val" id="metricTotalSpent">₹0.00</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Loose Change Saved</div>
+        <div class="metric-val" id="metricTotalSaved" style="color: var(--accent-green);">₹0.00</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Active Savings Goals</div>
+        <div class="metric-val" id="metricPotCount">0 Goals</div>
+      </div>
+    </div>
+
+    <div class="dashboard">
+      <div>
+        <div class="panel">
+          <div class="panel-title">Add New Bill</div>
+          
+          <div class="form-group">
+            <label>Bill Name</label>
+            <input type="text" id="billTitle" class="form-control" placeholder="e.g., Dinner, Uber, Coffee, Snacks">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label>Who Paid?</label>
+              <select id="billPayer" class="form-control"></select>
+            </div>
+            <div class="form-group">
+              <label>Exact Amount (₹)</label>
+              <input type="number" id="billAmount" class="form-control" placeholder="e.g., 234" oninput="calculateSplit()">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Who Shared This Bill? (Up to 10 People)</label>
+            <div class="members-wrapper" id="membersContainer"></div>
+          </div>
+
+          <div class="form-group">
+            <label>Direct Loose Change Savings To:</label>
+            <select id="targetGoalSelect" class="form-control">
+              <option value="ALL">Split Across All Goals</option>
+            </select>
+          </div>
+
+          <div class="summary-box">
+            <div class="summary-row">
+              <span>Rounded Target (Nearest ₹10):</span>
+              <strong id="sumRound">₹0.00</strong>
+            </div>
+            <div class="summary-row">
+              <span>Loose Change Auto-Saved:</span>
+              <strong id="sumSave">+₹0.00</strong>
+            </div>
+            <div class="summary-row" style="color: #047857; margin-top: 6px; padding-top: 6px; border-top: 1px solid #a7f3d0; font-weight: 700;">
+              <span>Per Person Share (Base + Save):</span>
+              <strong id="sumPerPerson">₹0.00</strong>
+            </div>
+          </div>
+
+          <button class="btn" onclick="addBill()">Log Bill & Save History</button>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Saved Bills Ledger</div>
+          <table class="tx-table">
+            <thead>
+              <tr>
+                <th>Expense</th>
+                <th>Total & Saved</th>
+                <th>Status ("Who Paid" vs "Owes")</th>
+              </tr>
+            </thead>
+            <tbody id="txTable">
+              <tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px;">No bills added yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel">
+          <div class="panel-title">Create Goal</div>
+          <div class="form-group">
+            <input type="text" id="potTitle" class="form-control" placeholder="Goal Name (e.g., Trip, Headphones)">
+          </div>
+          <div class="form-group">
+            <input type="number" id="potTarget" class="form-control" placeholder="Target Amount (₹)">
+          </div>
+          <button class="btn" style="background: var(--accent-blue); box-shadow: 0 2px 4px rgba(59,130,246,0.2);" onclick="createGoal()">Add Savings Goal</button>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Savings Goals</div>
+          <div id="potList"><p style="font-size:12px; color:var(--text-muted); text-align:center;">No goals created yet.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let activeAuthMode = 'login';
+    let currentUser = null;
+
+    // User Data Schema State
+    let userState = {
+      members: ["You"],
+      totalSpent: 0,
+      totalSaved: 0,
+      goals: [],
+      history: []
+    };
+
+    // Auto-check active session on page load
+    window.onload = function() {
+      const sessionUser = localStorage.getItem('sns_active_session');
+      if (sessionUser) {
+        currentUser = sessionUser;
+        loadUserData();
+        showDashboard();
+      }
+    };
+
+    function switchAuthTab(mode) {
+      activeAuthMode = mode;
+      document.getElementById('authError').style.display = 'none';
+      if (mode === 'login') {
+        document.getElementById('tabLogin').className = 'auth-tab active';
+        document.getElementById('tabRegister').className = 'auth-tab';
+        document.getElementById('authSubmitBtn').innerText = 'Log In';
+      } else {
+        document.getElementById('tabLogin').className = 'auth-tab';
+        document.getElementById('tabRegister').className = 'auth-tab active';
+        document.getElementById('authSubmitBtn').innerText = 'Create Account';
+      }
+    }
+
+    function handleAuthSubmit() {
+      const user = document.getElementById('authUsername').value.trim();
+      const pass = document.getElementById('authPassword').value.trim();
+      const errEl = document.getElementById('authError');
+
+      if (!user || !pass) {
+        errEl.innerText = "Please enter both username and password.";
+        errEl.style.display = 'block';
+        return;
+      }
+
+      const userDbKey = 'sns_user_' + user.toLowerCase();
+      const existingUserRaw = localStorage.getItem(userDbKey);
+
+      if (activeAuthMode === 'register') {
+        if (existingUserRaw) {
+          errEl.innerText = "Username already exists. Please login instead.";
+          errEl.style.display = 'block';
+          return;
+        }
+
+        const newAccount = {
+          password: pass,
+          state: { members: ["You"], totalSpent: 0, totalSaved: 0, goals: [], history: [] }
+        };
+
+        localStorage.setItem(userDbKey, JSON.stringify(newAccount));
+        localStorage.setItem('sns_active_session', user);
+        currentUser = user;
+        loadUserData();
+        showDashboard();
+      } else {
+        if (!existingUserRaw) {
+          errEl.innerText = "Account not found. Please register first.";
+          errEl.style.display = 'block';
+          return;
+        }
+
+        const accountData = JSON.parse(existingUserRaw);
+        if (accountData.password !== pass) {
+          errEl.innerText = "Incorrect password.";
+          errEl.style.display = 'block';
+          return;
+        }
+
+        localStorage.setItem('sns_active_session', user);
+        currentUser = user;
+        loadUserData();
+        showDashboard();
+      }
+    }
+
+    function loadUserData() {
+      const userDbKey = 'sns_user_' + currentUser.toLowerCase();
+      const raw = localStorage.getItem(userDbKey);
+      if (raw) {
+        const account = JSON.parse(raw);
+        userState = account.state || userState;
+      }
+    }
+
+    function saveUserData() {
+      if (!currentUser) return;
+      const userDbKey = 'sns_user_' + currentUser.toLowerCase();
+      const raw = localStorage.getItem(userDbKey);
+      if (raw) {
+        const account = JSON.parse(raw);
+        account.state = userState;
+        localStorage.setItem(userDbKey, JSON.stringify(account));
+      }
+    }
+
+    function showDashboard() {
+      document.getElementById('authOverlay').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'block';
+      document.getElementById('currentUserLabel').innerText = currentUser;
+      
+      renderMembers();
+      updateGoalDropdown();
+      renderGoals();
+      renderHistory();
+
+      document.getElementById('metricTotalSpent').innerText = '₹' + userState.totalSpent.toFixed(2);
+      document.getElementById('metricTotalSaved').innerText = '₹' + userState.totalSaved.toFixed(2);
+    }
+
+    function logout() {
+      localStorage.removeItem('sns_active_session');
+      currentUser = null;
+      location.reload();
+    }
+
+    /* Core Application Logic */
+    function renderMembers() {
+      const container = document.getElementById('membersContainer');
+      const payerSel = document.getElementById('billPayer');
+
+      container.innerHTML = '';
+      payerSel.innerHTML = '';
+
+      userState.members.forEach((m, idx) => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.innerText = m;
+        payerSel.appendChild(opt);
+
+        const chip = document.createElement('div');
+        chip.className = 'member-chip';
+        chip.innerHTML = `
+          <input type="checkbox" class="member-cb" value="${m}" checked onchange="calculateSplit()">
+          <span>${m}</span>
+          ${m !== 'You' ? `<button class="remove-member-btn" onclick="removeMember(${idx})" title="Remove">×</button>` : ''}
+        `;
+        container.appendChild(chip);
+      });
+
+      if (userState.members.length < 10) {
+        const addBox = document.createElement('div');
+        addBox.className = 'add-member-box';
+        addBox.innerHTML = `
+          <input type="text" id="newMemberName" class="add-member-input" placeholder="+ Name" onkeydown="if(event.key==='Enter') addMemberInline()">
+          <button class="add-member-btn" onclick="addMemberInline()">Add</button>
+        `;
+        container.appendChild(addBox);
+      }
+
+      calculateSplit();
+    }
+
+    function addMemberInline() {
+      const input = document.getElementById('newMemberName');
+      if (!input) return;
+      const name = input.value.trim();
+
+      if (!name) return;
+
+      if (userState.members.length >= 10) {
+        alert("Maximum limit of 10 members reached.");
+        return;
+      }
+
+      if (userState.members.map(m => m.toLowerCase()).includes(name.toLowerCase())) {
+        alert("A member with this name already exists.");
+        return;
+      }
+
+      userState.members.push(name);
+      saveUserData();
+      renderMembers();
+    }
+
+    function removeMember(index) {
+      if (userState.members[index] === 'You') return;
+      userState.members.splice(index, 1);
+      saveUserData();
+      renderMembers();
+    }
+
+    function calculateSplit() {
+      const amount = parseFloat(document.getElementById('billAmount').value) || 0;
+      const selected = Array.from(document.querySelectorAll('.member-cb:checked')).map(cb => cb.value);
+
+      const rounded = amount > 0 ? Math.ceil(amount / 10) * 10 : 0;
+      const save = rounded - amount;
+      const perPerson = selected.length > 0 ? (rounded / selected.length) : 0;
+
+      document.getElementById('sumRound').innerText = '₹' + rounded.toFixed(2);
+      document.getElementById('sumSave').innerText = '+₹' + save.toFixed(2);
+      document.getElementById('sumPerPerson').innerText = selected.length > 0 
+        ? `₹${perPerson.toFixed(2)} (${selected.length} people)` 
+        : 'Select at least 1 person';
+    }
+
+    function addBill() {
+      const title = document.getElementById('billTitle').value.trim();
+      const payer = document.getElementById('billPayer').value;
+      const amount = parseFloat(document.getElementById('billAmount').value) || 0;
+      const selected = Array.from(document.querySelectorAll('.member-cb:checked')).map(cb => cb.value);
+      const targetGoalIdx = document.getElementById('targetGoalSelect').value;
+
+      if (!title || amount <= 0) {
+        alert("Please enter a valid bill name and amount.");
+        return;
+      }
+
+      if (selected.length === 0) {
+        alert("Please select at least 1 member sharing the bill.");
+        return;
+      }
+
+      const rounded = Math.ceil(amount / 10) * 10;
+      const save = rounded - amount;
+      const perPerson = rounded / selected.length;
+
+      const billRecord = {
+        id: Date.now(),
+        title,
+        payer,
+        amount,
+        save,
+        perPerson,
+        selected,
+        clearedMembers: []
+      };
+
+      userState.history.unshift(billRecord);
+      userState.totalSpent += amount;
+      userState.totalSaved += save;
+
+      if (userState.goals.length > 0 && save > 0) {
+        if (targetGoalIdx === "ALL") {
+          const sharePerGoal = save / userState.goals.length;
+          userState.goals.forEach(g => g.current += sharePerGoal);
+        } else {
+          const idx = parseInt(targetGoalIdx);
+          if (userState.goals[idx]) userState.goals[idx].current += save;
+        }
+        renderGoals();
+      }
+
+      saveUserData();
+
+      document.getElementById('metricTotalSpent').innerText = '₹' + userState.totalSpent.toFixed(2);
+      document.getElementById('metricTotalSaved').innerText = '₹' + userState.totalSaved.toFixed(2);
+
+      document.getElementById('billTitle').value = '';
+      document.getElementById('billAmount').value = '';
+      calculateSplit();
+      renderHistory();
+    }
+
+    function markCleared(billId, memberName) {
+      const bill = userState.history.find(b => b.id === billId);
+      if (bill && !bill.clearedMembers.includes(memberName)) {
+        bill.clearedMembers.push(memberName);
+        saveUserData();
+        renderHistory();
+      }
+    }
+
+    function renderHistory() {
+      const tbody = document.getElementById('txTable');
+      tbody.innerHTML = '';
+
+      if (userState.history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px;">No bills added yet.</td></tr>';
+        return;
+      }
+
+      userState.history.forEach(bill => {
+        let tags = bill.selected.map(m => {
+          if (m === bill.payer) {
+            return `<span class="tag-paid">👑 ${m} Paid</span>`;
+          } else if (bill.clearedMembers.includes(m)) {
+            return `<span class="tag-cleared">✓ ${m} Cleared</span>`;
+          } else {
+            return `<span class="tag-owes" onclick="markCleared(${bill.id}, '${m}')">⏳ ${m} (Owes ₹${bill.perPerson.toFixed(0)})</span>`;
+          }
+        }).join(' ');
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>
+            <strong>${bill.title}</strong><br>
+            <small style="color:var(--text-muted)">Paid by ${bill.payer} (${bill.selected.length} shared)</small>
+          </td>
+          <td>
+            ₹${bill.amount.toFixed(2)}<br>
+            <small style="color:var(--accent-green); font-weight:600;">+₹${bill.save.toFixed(2)} saved</small>
+          </td>
+          <td>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">${tags}</div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function createGoal() {
+      const title = document.getElementById('potTitle').value.trim();
+      const target = parseFloat(document.getElementById('potTarget').value) || 0;
+
+      if (!title || target <= 0) {
+        alert("Please enter a valid goal name and target amount.");
+        return;
+      }
+
+      userState.goals.push({ title, target, current: 0 });
+      document.getElementById('potTitle').value = '';
+      document.getElementById('potTarget').value = '';
+      
+      saveUserData();
+      updateGoalDropdown();
+      renderGoals();
+    }
+
+    function updateGoalDropdown() {
+      const sel = document.getElementById('targetGoalSelect');
+      sel.innerHTML = '<option value="ALL">Split Across All Goals</option>';
+      userState.goals.forEach((g, idx) => {
+        sel.innerHTML += `<option value="${idx}">Direct to: ${g.title}</option>`;
+      });
+    }
+
+    function renderGoals() {
+      const box = document.getElementById('potList');
+      box.innerHTML = '';
+      document.getElementById('metricPotCount').innerText = userState.goals.length + ' Goals';
+
+      if (userState.goals.length === 0) {
+        box.innerHTML = '<p style="font-size:12px; color:var(--text-muted); text-align:center;">No goals created yet.</p>';
+        return;
+      }
+
+      userState.goals.forEach(g => {
+        const pct = Math.min(100, (g.current / g.target) * 100);
+        box.innerHTML += `
+          <div style="background:#f8fafc; border:1px solid var(--card-border); padding:12px; border-radius:10px; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600;">
+              <span>${g.title}</span>
+              <span style="color:var(--accent-green)">₹${g.current.toFixed(2)} / ₹${g.target.toFixed(2)}</span>
+            </div>
+            <div style="width:100%; height:8px; background:#e2e8f0; border-radius:4px; margin-top:8px; overflow:hidden;">
+              <div style="width:${pct}%; height:100%; background:linear-gradient(90deg, var(--accent-blue), var(--accent-green));"></div>
+            </div>
+          </div>`;
+      });
+    }
+  </script>
+</body>
+</html>
